@@ -7,6 +7,7 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import math
+from decimal import Decimal,getcontext
 
 # Coordinates created by this are converted into G1 commands.
 #
@@ -22,7 +23,6 @@ X_AXIS = 0
 Y_AXIS = 1
 Z_AXIS = 2
 E_AXIS = 3
-
 
 class ArcSupport:
 
@@ -106,6 +106,9 @@ class ArcSupport:
                 alpha_axis, beta_axis, helical_axis):
         # todo: sometimes produces full circles
 
+        # Set Decimal precision to 10. Seems like a good arbitrary number
+        getcontext().prec = 10
+
         # Radius vector from center to current location
         r_P = -offset[0]
         r_Q = -offset[1]
@@ -115,29 +118,30 @@ class ArcSupport:
         center_Q = currentPos[beta_axis] - r_Q
         rt_Alpha = targetPos[alpha_axis] - center_P
         rt_Beta = targetPos[beta_axis] - center_Q
-        angular_travel = math.atan2(r_P * rt_Beta - r_Q * rt_Alpha,
-                                    r_P * rt_Alpha + r_Q * rt_Beta)
+        angular_travel = Decimal(math.atan2(round(r_P * rt_Beta - r_Q * rt_Alpha, 10),
+                                            round(r_P * rt_Alpha + r_Q * rt_Beta, 10)))
+
         if angular_travel < 0.:
-            angular_travel += 2. * math.pi
+            angular_travel += Decimal(2. * math.pi)
         if clockwise:
-            angular_travel -= 2. * math.pi
+            angular_travel -= Decimal(2. * math.pi)
 
         if (angular_travel == 0.
             and currentPos[alpha_axis] == targetPos[alpha_axis]
             and currentPos[beta_axis] == targetPos[beta_axis]):
             # Make a circle if the angular rotation is 0 and the
             # target is current position
-            angular_travel = 2. * math.pi
+            angular_travel = Decimal(2. * math.pi)
 
         # Determine number of segments
-        linear_travel = targetPos[helical_axis] - currentPos[helical_axis]
-        radius = math.hypot(r_P, r_Q)
+        linear_travel = Decimal(targetPos[helical_axis] - currentPos[helical_axis])
+        radius = Decimal(math.hypot(r_P, r_Q))
         flat_mm = radius * angular_travel
         if linear_travel:
-            mm_of_travel = math.hypot(flat_mm, linear_travel)
+            mm_of_travel = Decimal(math.hypot(flat_mm, linear_travel))
         else:
-            mm_of_travel = math.fabs(flat_mm)
-        segments = max(1., math.floor(mm_of_travel / self.mm_per_arc_segment))
+            mm_of_travel = Decimal(math.fabs(flat_mm))
+        segments = Decimal(max(1., math.floor(mm_of_travel / Decimal(self.mm_per_arc_segment))))
 
         # Generate coordinates
         theta_per_segment = angular_travel / segments
@@ -153,18 +157,17 @@ class ArcSupport:
             e_per_move = (asE - e_base) / segments
 
         for i in range(1, int(segments) + 1):
-            dist_Helical = i * linear_per_segment
+            dist_Helical = Decimal(i) * linear_per_segment
             c_theta = i * theta_per_segment
-            cos_Ti = math.cos(c_theta)
-            sin_Ti = math.sin(c_theta)
-            r_P = -offset[0] * cos_Ti + offset[1] * sin_Ti
-            r_Q = -offset[0] * sin_Ti - offset[1] * cos_Ti
+            cos_Ti = Decimal(math.cos(c_theta))
+            sin_Ti = Decimal(math.sin(c_theta))
+            r_P = Decimal(-offset[0]) * cos_Ti + Decimal(offset[1]) * sin_Ti
+            r_Q = Decimal(-offset[0]) * sin_Ti - Decimal(offset[1]) * cos_Ti
 
             c = [None, None, None]
-            c[alpha_axis] = center_P + r_P
-            c[beta_axis] = center_Q + r_Q
-            c[helical_axis] = currentPos[helical_axis] + dist_Helical
-
+            c[alpha_axis] = Decimal(center_P) + r_P
+            c[beta_axis] = Decimal(center_Q) + r_Q
+            c[helical_axis] = Decimal(currentPos[helical_axis]) + dist_Helical
 
             if i == segments:
                 c = targetPos
