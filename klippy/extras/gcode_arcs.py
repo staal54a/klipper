@@ -7,6 +7,7 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import math
+from decimal import Decimal,getcontext
 
 # Coordinates created by this are converted into G1 commands.
 #
@@ -22,7 +23,6 @@ X_AXIS = 0
 Y_AXIS = 1
 Z_AXIS = 2
 E_AXIS = 3
-
 
 class ArcSupport:
 
@@ -90,6 +90,11 @@ class ArcSupport:
         asE = gcmd.get_float("E", None)
         asF = gcmd.get_float("F", None)
 
+
+        asPlanar = [Decimal(str(i)) for i in asPlanar]
+        asTarget = [Decimal(str(i)) if i is not None else None for i in asTarget]
+        currentPos = [Decimal(str(i)) if i is not None else None for i in currentPos]
+        
         # Build list of linear coordinates to move
         coords = self.planArc(currentPos, asTarget, asPlanar,
                               clockwise, *axes)
@@ -123,6 +128,9 @@ class ArcSupport:
                 alpha_axis, beta_axis, helical_axis):
         # todo: sometimes produces full circles
 
+        # Set Decimal precision to 10. Seems like a good arbitrary number
+        getcontext().prec = 10
+
         # Radius vector from center to current location
         r_P = -offset[0]
         r_Q = -offset[1]
@@ -132,38 +140,39 @@ class ArcSupport:
         center_Q = currentPos[beta_axis] - r_Q
         rt_Alpha = targetPos[alpha_axis] - center_P
         rt_Beta = targetPos[beta_axis] - center_Q
-        angular_travel = math.atan2(r_P * rt_Beta - r_Q * rt_Alpha,
-                                    r_P * rt_Alpha + r_Q * rt_Beta)
+        angular_travel = Decimal(math.atan2(r_P * rt_Beta - r_Q * rt_Alpha,
+                                    r_P * rt_Alpha + r_Q * rt_Beta))
+
         if angular_travel < 0.:
-            angular_travel += 2. * math.pi
+            angular_travel += Decimal(2. * math.pi)
         if clockwise:
-            angular_travel -= 2. * math.pi
+            angular_travel -= Decimal(2. * math.pi)
 
         if (angular_travel == 0.
             and currentPos[alpha_axis] == targetPos[alpha_axis]
             and currentPos[beta_axis] == targetPos[beta_axis]):
             # Make a circle if the angular rotation is 0 and the
             # target is current position
-            angular_travel = 2. * math.pi
+            angular_travel = Decimal(2. * math.pi)
 
         # Determine number of segments
         linear_travel = targetPos[helical_axis] - currentPos[helical_axis]
-        radius = math.hypot(r_P, r_Q)
+        radius = Decimal(math.hypot(r_P, r_Q))
         flat_mm = radius * angular_travel
         if linear_travel:
-            mm_of_travel = math.hypot(flat_mm, linear_travel)
+            mm_of_travel = Decimal(math.hypot(flat_mm, linear_travel))
         else:
-            mm_of_travel = math.fabs(flat_mm)
-        segments = max(1., math.floor(mm_of_travel / self.mm_per_arc_segment))
+            mm_of_travel = Decimal(math.fabs(flat_mm))
+        segments = Decimal(max(1., math.floor(mm_of_travel / Decimal(self.mm_per_arc_segment))))
 
         # Generate coordinates
         theta_per_segment = angular_travel / segments
         linear_per_segment = linear_travel / segments
         coords = []
         for i in range(1, int(segments)):
-            dist_Helical = i * linear_per_segment
-            cos_Ti = math.cos(i * theta_per_segment)
-            sin_Ti = math.sin(i * theta_per_segment)
+            dist_Helical = Decimal(i) * linear_per_segment
+            cos_Ti = Decimal(math.cos(i * theta_per_segment))
+            sin_Ti = Decimal(math.sin(i * theta_per_segment))
             r_P = -offset[0] * cos_Ti + offset[1] * sin_Ti
             r_Q = -offset[0] * sin_Ti - offset[1] * cos_Ti
 
@@ -175,6 +184,7 @@ class ArcSupport:
             coords.append(self.Coord(*c))
 
         coords.append(targetPos)
+
         return coords
 
 def load_config(config):
